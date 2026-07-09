@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  checks:
+    name: Quality checks
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990
+      with:
+        version: '0.11.25'
+
+    - name: Sync dependencies
+      run: uv sync --group dev
+
+    - name: Format check
+      run: uv run ruff format --check .
+
+    - name: Lint
+      run: uv run ruff check .
+
+    - name: Typecheck
+      run: uv run mypy app
+
+    - name: Test
+      run: uv run pytest

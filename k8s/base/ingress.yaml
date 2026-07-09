@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nrpilot-api
+spec:
+  ingressClassName: haproxy
+  rules:
+  - host: nrpilot-api.nrp-nautilus.io
+    http:
+      paths:
+      - path: /
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: nrpilot-api
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - nrpilot-api.nrp-nautilus.io

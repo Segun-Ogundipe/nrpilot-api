@@ -1,0 +1,77 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-deploy:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Resolve environment
+      id: env
+      run: |-
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          ENV="${{ github.event.inputs.environment }}"
+        elif [ "${GITHUB_REF_NAME}" = "main" ]; then
+          ENV="prod"
+        else
+          ENV="dev"
+        fi
+        echo "environment=$ENV" >> "$GITHUB_OUTPUT"
+        echo "namespace=$(if [ "$ENV" = "prod" ]; then echo nrpilot; else echo gsoc-2026-chatbot; fi)" >> "$GITHUB_OUTPUT"
+        echo "image_tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+    - name: Log in to GHCR
+      uses: docker/login-action@v4
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push image
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        push: true
+        tags: |-
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.image_tag }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v4
+
+    - name: Configure kubeconfig
+      run: |-
+        mkdir -p "$HOME/.kube"
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > "$HOME/.kube/config"
+        chmod 600 "$HOME/.kube/config"
+
+    - name: Deploy to Kubernetes
+      run: |-
+        kubectl apply -k k8s/overlays/${{ steps.env.outputs.environment }} -n ${{ steps.env.outputs.namespace }} --request-timeout=300s
+        kubectl set image deployment/nrpilot-api nrpilot-api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.image_tag }} -n ${{ steps.env.outputs.namespace }}
