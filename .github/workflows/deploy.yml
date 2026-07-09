@@ -73,5 +73,5 @@ jobs:
 
     - name: Deploy to Kubernetes
       run: |-
+        kubectl apply -k k8s/overlays/${{ steps.env.outputs.environment }} -n ${{ steps.env.outputs.namespace }} --request-timeout=300s
         kubectl set image deployment/nrpilot-api nrpilot-api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.image_tag }} -n ${{ steps.env.outputs.namespace }}
-        kubectl apply -k k8s/overlays/dev -n ${{ steps.env.outputs.namespace }} --request-timeout=300s
