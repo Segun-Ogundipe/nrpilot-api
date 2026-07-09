@@ -1,0 +1,65 @@
+[project]
+name = "nrpilot-api"
+version = "0.1.0"
+description = "Backend services for NRPilot, an AI assistant for the National Research Platform that enables Kubernetes cluster management, diagnostics, and AI-powered operations."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.138.1",
+    "pydantic-settings>=2.14.2",
+    "python-dotenv>=1.2.2",
+    "uvicorn[standard]>=0.49.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.5.0",
+    "mypy>=2.1.0",
+    "pre-commit>=4.6.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.20",
+]
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "W", "I", "UP", "B",]
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.13"
+
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+
+strict_optional = true
+
+ignore_missing_imports = true
+
+exclude = [
+    "tests"
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+testpaths = [
+    "tests",
+]
+
+python_files = [
+    "test_*.py",
+]
+
+addopts = [
+    "--cov=app",
+    "--cov-report=term-missing",
+]
