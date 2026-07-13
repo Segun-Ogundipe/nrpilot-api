@@ -22,6 +22,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  NAMESPACE: gsoc-2026-chatbot
 
 jobs:
   build-and-deploy:
@@ -49,7 +50,6 @@ jobs:
           ENV="dev"
         fi
         echo "environment=$ENV" >> "$GITHUB_OUTPUT"
-        echo "namespace=$(if [ "$ENV" = "prod" ]; then echo nrpilot; else echo gsoc-2026-chatbot; fi)" >> "$GITHUB_OUTPUT"
         echo "image_tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
 
     - name: Log in to GHCR
@@ -79,5 +79,5 @@ jobs:
 
     - name: Deploy to Kubernetes
       run: |-
-        kubectl apply -k k8s/overlays/${{ steps.env.outputs.environment }} -n ${{ steps.env.outputs.namespace }} --request-timeout=300s
-        kubectl set image deployment/nrpilot-api nrpilot-api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.image_tag }} -n ${{ steps.env.outputs.namespace }}
+        kubectl apply -k k8s/overlays/${{ steps.env.outputs.environment }} -n ${{ env.NAMESPACE }} --request-timeout=300s
+        kubectl set image deployment/nrpilot-api nrpilot-api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.image_tag }} -n ${{ env.NAMESPACE }}
