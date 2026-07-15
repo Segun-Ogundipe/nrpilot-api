@@ -1,8 +1,18 @@
+from datetime import datetime
 from typing import TypeVar
-from unittest.mock import Mock
 
 import pytest
 from kubernetes.client import ApiException
+from kubernetes.client.models import (
+    V1Deployment,
+    V1DeploymentCondition,
+    V1DeploymentStatus,
+    V1Namespace,
+    V1ObjectMeta,
+    V1Pod,
+    V1PodSpec,
+    V1PodStatus,
+)
 
 from app.adapters.kubernetes.client import KubernetesClient
 from app.adapters.kubernetes.exceptions import (
@@ -12,6 +22,7 @@ from app.adapters.kubernetes.exceptions import (
     PodNotFoundError,
 )
 from app.core.settings import Settings
+from app.models.kubernetes.models import Namespace, Pod
 from tests.adapters.kubernetes.conftest import KubernetesMocks
 
 E = TypeVar("E", bound=BaseException, default=BaseException)
@@ -30,7 +41,10 @@ def test_initializes_clients(
 def test_list_namespaces(
     kubernetes_client: KubernetesClient, mock_k8s_clients: KubernetesMocks
 ) -> None:
-    namespaces = [Mock(), Mock()]
+    namespaces = [
+        V1Namespace(metadata=V1ObjectMeta(name="default")),
+        V1Namespace(metadata=V1ObjectMeta(name="kube-system")),
+    ]
 
     core = mock_k8s_clients.core.return_value
 
@@ -38,7 +52,7 @@ def test_list_namespaces(
 
     result = kubernetes_client.list_namespaces()
 
-    assert result == namespaces
+    assert result == [Namespace(name="default"), Namespace(name="kube-system")]
 
     core.list_namespace.assert_called_once_with()
 
@@ -46,7 +60,13 @@ def test_list_namespaces(
 def test_list_pods(
     kubernetes_client: KubernetesClient, mock_k8s_clients: KubernetesMocks
 ) -> None:
-    pods = [Mock()]
+    pods = [
+        V1Pod(
+            metadata=V1ObjectMeta(name="api", namespace="default"),
+            status=V1PodStatus(phase="Running", pod_ip="some-ip"),
+            spec=V1PodSpec(node_name="pod-wert", containers=""),
+        )
+    ]
 
     core = mock_k8s_clients.core.return_value
 
@@ -54,7 +74,15 @@ def test_list_pods(
 
     result = kubernetes_client.list_pods("default")
 
-    assert result == pods
+    assert result == [
+        Pod(
+            name="api",
+            namespace="default",
+            phase="Running",
+            node_name="pod-wert",
+            pod_ip="some-ip",
+        )
+    ]
 
     core.list_namespaced_pod.assert_called_once_with("default")
 
@@ -62,7 +90,11 @@ def test_list_pods(
 def test_describe_pod(
     kubernetes_client: KubernetesClient, mock_k8s_clients: KubernetesMocks
 ) -> None:
-    pod = Mock()
+    pod = V1Pod(
+        metadata=V1ObjectMeta(name="api", namespace="default"),
+        status=V1PodStatus(phase="Running", pod_ip="some-ip"),
+        spec=V1PodSpec(node_name="pod-wert", containers=""),
+    )
 
     core = mock_k8s_clients.core.return_value
 
@@ -70,7 +102,9 @@ def test_describe_pod(
 
     result = kubernetes_client.describe_pod("default", "api")
 
-    assert result is pod
+    assert result.name == "api"
+    assert result.phase == "Running"
+    assert result.namespace == "default"
 
     core.read_namespaced_pod.assert_called_once_with(name="api", namespace="default")
 
@@ -82,7 +116,7 @@ def test_get_logs(
 
     core.read_namespaced_pod_log.return_value = "hello"
 
-    logs = kubernetes_client.get_pod_logs("default", "api", tail_lines=50)
+    logs = kubernetes_client.get_pod_log("default", "api", tail_lines=50)
 
     assert logs == "hello"
 
@@ -94,7 +128,25 @@ def test_get_logs(
 def test_list_deployments(
     kubernetes_client: KubernetesClient, mock_k8s_clients: KubernetesMocks
 ) -> None:
-    deployments = [Mock()]
+    deployments = [
+        V1Deployment(
+            metadata=(V1ObjectMeta(name="api-dep", namespace="default")),
+            status=V1DeploymentStatus(
+                replicas=1,
+                available_replicas=1,
+                unavailable_replicas=1,
+                ready_replicas=1,
+                conditions=V1DeploymentCondition(
+                    last_transition_time=datetime.now(),
+                    last_update_time=datetime.now(),
+                    message="some message",
+                    reason="some reason",
+                    status="some status",
+                    type="some type",
+                ),
+            ),
+        )
+    ]
 
     apps = mock_k8s_clients.apps.return_value
 
@@ -102,7 +154,11 @@ def test_list_deployments(
 
     result = kubernetes_client.list_deployments("default")
 
-    assert result == deployments
+    assert len(result) == 1
+    assert result[0].name == "api-dep"
+    assert result[0].namespace == "default"
+    assert result[0].ready_replicas == 1
+    assert result[0].condition.message == "some message"
 
     apps.list_namespaced_deployment.assert_called_once_with("default")
 

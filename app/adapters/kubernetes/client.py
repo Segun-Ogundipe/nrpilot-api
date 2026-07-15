@@ -14,6 +14,8 @@ from app.adapters.kubernetes.exceptions import (
 )
 from app.core.logging import get_logger
 from app.core.settings import Settings
+from app.domain.kubernetes.ports import KubernetesClientPort
+from app.models.kubernetes.models import Deployment, DeploymentCondition, Namespace, Pod
 
 logger = get_logger(__name__)
 
@@ -25,35 +27,56 @@ class ResourceType(StrEnum):
     POD = "pod"
     DEPLOYMENT = "deployment"
 
-from app.adapters.kubernetes.config import load_kubernetes_config
-from app.core.settings import Settings
 
-
-class KubernetesClient:
+class KubernetesClient(KubernetesClientPort):
     def __init__(self, settings: Settings) -> None:
         load_kubernetes_config(settings)
 
         self._core = client.CoreV1Api()
         self._apps = client.AppsV1Api()
 
-    def list_namespaces(self) -> Any:
-        return self._execute(
-            lambda: self._core.list_namespace().items, resource=ResourceType.NAMESPACE
+    def list_namespaces(self) -> list[Namespace]:
+        k8s_namespaces = self._execute(
+            lambda: self._core.list_namespace(), resource=ResourceType.NAMESPACE
         )
 
-    def list_pods(self, namespace: str) -> Any:
-        return self._execute(
-            lambda: self._core.list_namespaced_pod(namespace).items,
+        return [
+            Namespace(name=namespace.metadata.name)
+            for namespace in k8s_namespaces.items
+        ]
+
+    def list_pods(self, namespace: str) -> list[Pod]:
+        k8s_pods = self._execute(
+            lambda: self._core.list_namespaced_pod(namespace),
             resource=ResourceType.NAMESPACE,
         )
 
-    def describe_pod(self, namespace: str, pod_name: str) -> Any:
-        return self._execute(
+        return [
+            Pod(
+                name=pod.metadata.name,
+                namespace=pod.metadata.namespace,
+                phase=pod.status.phase,
+                node_name=pod.spec.node_name,
+                pod_ip=pod.status.pod_ip,
+            )
+            for pod in k8s_pods.items
+        ]
+
+    def describe_pod(self, namespace: str, pod_name: str) -> Pod:
+        k8s_pod = self._execute(
             lambda: self._core.read_namespaced_pod(name=pod_name, namespace=namespace),
             resource=ResourceType.POD,
         )
 
-    def get_pod_logs(
+        return Pod(
+            name=k8s_pod.metadata.name,
+            namespace=k8s_pod.metadata.namespace,
+            phase=k8s_pod.status.phase,
+            node_name=k8s_pod.spec.node_name,
+            pod_ip=k8s_pod.status.pod_ip,
+        )
+
+    def get_pod_log(
         self, namespace: str, pod_name: str, tail_lines: int | None = None
     ) -> Any:
         return self._execute(
@@ -63,11 +86,31 @@ class KubernetesClient:
             resource=ResourceType.POD,
         )
 
-    def list_deployments(self, namespace: str) -> Any:
-        return self._execute(
-            lambda: self._apps.list_namespaced_deployment(namespace).items,
+    def list_deployments(self, namespace: str) -> list[Deployment]:
+        k8s_deployments = self._execute(
+            lambda: self._apps.list_namespaced_deployment(namespace),
             resource=ResourceType.DEPLOYMENT,
         )
+
+        return [
+            Deployment(
+                name=deployment.metadata.name,
+                namespace=deployment.metadata.namespace,
+                ready_replicas=deployment.status.ready_replicas,
+                replicas=deployment.status.replicas,
+                available_replicas=deployment.status.available_replicas,
+                unavailable_replicas=deployment.status.unavailable_replicas,
+                condition=DeploymentCondition(
+                    last_transition_time=deployment.status.conditions.last_transition_time,
+                    last_update_time=deployment.status.conditions.last_update_time,
+                    message=deployment.status.conditions.message,
+                    reason=deployment.status.conditions.reason,
+                    status=deployment.status.conditions.status,
+                    type=deployment.status.conditions.type,
+                ),
+            )
+            for deployment in k8s_deployments.items
+        ]
 
     def _execute(self, operation: Callable[[], T], resource: str) -> T:
         try:
