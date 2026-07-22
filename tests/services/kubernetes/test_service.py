@@ -1,7 +1,13 @@
 from datetime import datetime
 from unittest.mock import Mock
 
-from app.models.kubernetes.models import Deployment, DeploymentCondition, Namespace, Pod
+from app.models.kubernetes.models import (
+    Deployment,
+    DeploymentCondition,
+    KubernetesEvent,
+    Namespace,
+    Pod,
+)
 from app.services.kubernetes.service import KubernetesService
 
 
@@ -54,6 +60,21 @@ def test_get_pod() -> None:
     assert pod.phase == "Running"
 
     client.describe_pod.assert_called_once_with("default", "api")
+
+
+def test_list_pod_events() -> None:
+    client = Mock()
+    client.list_pod_events.return_value = [
+        KubernetesEvent(
+            reason="BackOff", message="Back-off restarting failed container"
+        )
+    ]
+    service = KubernetesService(client)
+
+    events = service.list_pod_events("default", "api")
+
+    assert events[0].reason == "BackOff"
+    client.list_pod_events.assert_called_once_with("default", "api")
 
 
 def test_get_pod_log_without_tail_lines() -> None:

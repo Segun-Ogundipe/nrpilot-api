@@ -15,6 +15,15 @@ class Pod(BaseModel):
     pod_ip: str | None = None
 
 
+class KubernetesEvent(BaseModel):
+    type: str | None = None
+    reason: str | None = None
+    message: str | None = None
+    count: int | None = None
+    first_timestamp: datetime | None = None
+    last_timestamp: datetime | None = None
+
+
 class DeploymentCondition(BaseModel):
     last_transition_time: datetime
     last_update_time: datetime

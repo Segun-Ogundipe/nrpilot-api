@@ -15,7 +15,13 @@ from app.adapters.kubernetes.exceptions import (
 from app.core.logging import get_logger
 from app.core.settings import Settings
 from app.domain.kubernetes.ports import KubernetesClientPort
-from app.models.kubernetes.models import Deployment, DeploymentCondition, Namespace, Pod
+from app.models.kubernetes.models import (
+    Deployment,
+    DeploymentCondition,
+    KubernetesEvent,
+    Namespace,
+    Pod,
+)
 
 logger = get_logger(__name__)
 
@@ -30,10 +36,10 @@ class ResourceType(StrEnum):
 
 class KubernetesClient(KubernetesClientPort):
     def __init__(self, settings: Settings) -> None:
-        load_kubernetes_config(settings)
+        api_client = load_kubernetes_config(settings)
 
-        self._core = client.CoreV1Api()
-        self._apps = client.AppsV1Api()
+        self._core = client.CoreV1Api(api_client)
+        self._apps = client.AppsV1Api(api_client)
 
     def list_namespaces(self) -> list[Namespace]:
         k8s_namespaces = self._execute(
@@ -75,6 +81,27 @@ class KubernetesClient(KubernetesClientPort):
             node_name=k8s_pod.spec.node_name,
             pod_ip=k8s_pod.status.pod_ip,
         )
+
+    def list_pod_events(self, namespace: str, pod_name: str) -> list[KubernetesEvent]:
+        k8s_events = self._execute(
+            lambda: self._core.list_namespaced_event(
+                namespace,
+                field_selector=f"involvedObject.kind=Pod,involvedObject.name={pod_name}",
+            ),
+            resource=ResourceType.NAMESPACE,
+        )
+
+        return [
+            KubernetesEvent(
+                type=event.type,
+                reason=event.reason,
+                message=event.message,
+                count=event.count,
+                first_timestamp=event.first_timestamp,
+                last_timestamp=event.last_timestamp,
+            )
+            for event in k8s_events.items
+        ]
 
     def get_pod_log(
         self, namespace: str, pod_name: str, tail_lines: int | None = None

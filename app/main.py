@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.api.health import router as health_router
+from app.api.v1.chat import router as chat_router
 from app.config import setup_logging
 from app.core.logging import bind_context, clear_context, get_logger
 
@@ -68,3 +69,4 @@ async def logging_middleware(
 
 
 app.include_router(health_router)
+app.include_router(chat_router)

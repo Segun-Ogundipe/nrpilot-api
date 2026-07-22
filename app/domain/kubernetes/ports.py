@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from app.models.kubernetes.models import Deployment, Namespace, Pod
+from app.models.kubernetes.models import Deployment, KubernetesEvent, Namespace, Pod
 
 
 class KubernetesClientPort(ABC):
@@ -15,6 +15,10 @@ class KubernetesClientPort(ABC):
 
     @abstractmethod
     def describe_pod(self, namespace: str, pod_name: str) -> Pod:
+        pass
+
+    @abstractmethod
+    def list_pod_events(self, namespace: str, pod_name: str) -> list[KubernetesEvent]:
         pass
 
     @abstractmethod

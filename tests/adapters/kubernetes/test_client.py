@@ -4,11 +4,13 @@ from typing import TypeVar
 import pytest
 from kubernetes.client import ApiException
 from kubernetes.client.models import (
+    CoreV1Event,
     V1Deployment,
     V1DeploymentCondition,
     V1DeploymentStatus,
     V1Namespace,
     V1ObjectMeta,
+    V1ObjectReference,
     V1Pod,
     V1PodSpec,
     V1PodStatus,
@@ -107,6 +109,29 @@ def test_describe_pod(
     assert result.namespace == "default"
 
     core.read_namespaced_pod.assert_called_once_with(name="api", namespace="default")
+
+
+def test_list_pod_events(
+    kubernetes_client: KubernetesClient, mock_k8s_clients: KubernetesMocks
+) -> None:
+    event = CoreV1Event(
+        type="Warning",
+        reason="BackOff",
+        message="Back-off restarting failed container",
+        count=3,
+        involved_object=V1ObjectReference(kind="Pod", name="api", namespace="default"),
+        metadata=V1ObjectMeta(name="api.123", namespace="default"),
+    )
+    core = mock_k8s_clients.core.return_value
+    core.list_namespaced_event.return_value.items = [event]
+
+    events = kubernetes_client.list_pod_events("default", "api")
+
+    assert events[0].reason == "BackOff"
+    assert events[0].count == 3
+    core.list_namespaced_event.assert_called_once_with(
+        "default", field_selector="involvedObject.kind=Pod,involvedObject.name=api"
+    )
 
 
 def test_get_logs(

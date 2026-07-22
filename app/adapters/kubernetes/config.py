@@ -1,14 +1,14 @@
-from kubernetes import config
+from kubernetes.client import ApiClient, Configuration
 
 from app.core.settings import Settings
 
 
-def load_kubernetes_config(settings: Settings) -> None:
-    """
-    Configure the Kubernetes Python client.
+def load_kubernetes_config(settings: Settings) -> ApiClient:
+    configuration = Configuration(host=settings.kubernetes_host)
 
-    Loads the user's kubeconfig.
-    """
-    config.load_kube_config(
-        config_file=settings.kubernetes_kubeconfig, context=settings.kubernetes_context
-    )
+    if settings.kubernetes_api_key:
+        configuration.api_key["BearerToken"] = (
+            f"Bearer {settings.kubernetes_api_key.get_secret_value()}"
+        )
+
+    return ApiClient(configuration)

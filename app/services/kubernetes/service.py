@@ -1,7 +1,12 @@
 from typing import Any
 
 from app.domain.kubernetes.ports import KubernetesClientPort
-from app.models.kubernetes.models import Deployment, Namespace, Pod
+from app.models.kubernetes.models import (
+    Deployment,
+    KubernetesEvent,
+    Namespace,
+    Pod,
+)
 
 
 class KubernetesService:
@@ -16,6 +21,9 @@ class KubernetesService:
 
     def get_pod(self, namespace: str, pod_name: str) -> Pod:
         return self._client.describe_pod(namespace, pod_name)
+
+    def list_pod_events(self, namespace: str, pod_name: str) -> list[KubernetesEvent]:
+        return self._client.list_pod_events(namespace, pod_name)
 
     def get_pod_log(
         self, namespace: str, pod_name: str, tail_lines: int | None = None

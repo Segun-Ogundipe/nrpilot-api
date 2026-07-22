@@ -1,12 +1,30 @@
-from unittest.mock import MagicMock, patch
+from pydantic import SecretStr
 
 from app.adapters.kubernetes.config import load_kubernetes_config
 from app.core.settings import Settings
 
 
-@patch("app.adapters.kubernetes.config.config.load_kube_config")
-def test_load_local(mock_loader: MagicMock) -> None:
-    settings = Settings(kubernetes_kubeconfig="test-config", kubernetes_context="kind")
-    load_kubernetes_config(settings)
+def test_load_local(settings: Settings) -> None:
+    api_client = load_kubernetes_config(settings)
 
-    mock_loader.assert_called_once_with(config_file="test-config", context="kind")
+    assert api_client.configuration.api_key == {"BearerToken": "Bearer qwertyuiop"}
+    assert api_client.configuration.host == "http://localhost"
+
+
+def test_load_local_without_api_key() -> None:
+    settings = Settings(kubernetes_host="http://localhost")
+
+    api_client = load_kubernetes_config(settings)
+
+    assert "BearerToken" not in api_client.configuration.api_key
+
+
+def test_secret_value_is_not_leaked_through_repr() -> None:
+    settings = Settings(
+        kubernetes_host="http://localhost",
+        kubernetes_api_key=SecretStr("qwertyuiop"),
+        nrp_llm_token=SecretStr("supersecret"),
+    )
+
+    assert "supersecret" not in repr(settings)
+    assert "qwertyuiop" not in repr(settings)
