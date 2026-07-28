@@ -1,3 +1,4 @@
+import json
 from collections.abc import Sequence
 from typing import Any
 
@@ -35,7 +36,7 @@ def build_diagnostics_tools(service: KubernetesService) -> Sequence[BaseTool]:
             namespace=namespace,
             pod_name=pod_name,
         )
-        return service.get_pod(namespace, pod_name).model_dump_json()
+        return _as_json(service.get_pod(namespace, pod_name))
 
     @tool
     def list_pod_events(namespace: str, pod_name: str) -> str:
@@ -47,6 +48,42 @@ def build_diagnostics_tools(service: KubernetesService) -> Sequence[BaseTool]:
             pod_name=pod_name,
         )
         return _as_json(service.list_pod_events(namespace, pod_name))
+
+    @tool
+    def list_namespace_events(namespace: str) -> str:
+        """List recent Kubernetes events for a namespace that can reveal scheduling, image pull, and crash-loop issues."""
+        logger.info(
+            "kubernetes_tool_invoked",
+            tool="list_namespace_events",
+            namespace=namespace,
+        )
+        return _as_json(service.list_namespace_events(namespace))
+
+    @tool
+    def list_resource_quotas(namespace: str) -> str:
+        """List resource quotas and their current usage for a namespace."""
+        logger.info(
+            "kubernetes_tool_invoked",
+            tool="list_resource_quotas",
+            namespace=namespace,
+        )
+        return _as_json(service.list_resource_quotas(namespace))
+
+    @tool
+    def get_resource_usage(namespace: str) -> str:
+        """Summarize current pod counts and requested/limited CPU and memory usage for a namespace."""
+        logger.info(
+            "kubernetes_tool_invoked",
+            tool="get_resource_usage",
+            namespace=namespace,
+        )
+        return _as_json(service.get_resource_usage(namespace))
+
+    @tool
+    def list_nodes() -> str:
+        """List node readiness and status information for the cluster."""
+        logger.info("kubernetes_tool_invoked", tool="list_nodes")
+        return _as_json(service.list_nodes())
 
     @tool
     def get_pod_log(namespace: str, pod_name: str, tail_lines: int) -> Any:
@@ -75,10 +112,20 @@ def build_diagnostics_tools(service: KubernetesService) -> Sequence[BaseTool]:
         list_pods,
         describe_pod,
         list_pod_events,
+        list_namespace_events,
+        list_resource_quotas,
+        get_resource_usage,
+        list_nodes,
         get_pod_log,
         list_deployments,
     )
 
 
-def _as_json(items: Sequence[BaseModel]) -> str:
-    return "[" + ",".join(item.model_dump_json() for item in items) + "]"
+def _as_json(items: Sequence[BaseModel] | BaseModel) -> str:
+    if isinstance(items, BaseModel):
+        return str(items.model_dump_json())
+
+    if isinstance(items, Sequence) and not isinstance(items, (str, bytes, bytearray)):
+        return "[" + ",".join(_as_json(item) for item in items) + "]"
+
+    return json.dumps(items)

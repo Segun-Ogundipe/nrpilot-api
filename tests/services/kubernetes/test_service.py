@@ -6,7 +6,11 @@ from app.models.kubernetes.models import (
     DeploymentCondition,
     KubernetesEvent,
     Namespace,
+    NodeCondition,
+    NodeStatus,
     Pod,
+    ResourceQuota,
+    ResourceUsage,
 )
 from app.services.kubernetes.service import KubernetesService
 
@@ -77,6 +81,84 @@ def test_list_pod_events() -> None:
     client.list_pod_events.assert_called_once_with("default", "api")
 
 
+def test_list_namespace_events() -> None:
+    client = Mock()
+    client.list_namespace_events.return_value = [
+        KubernetesEvent(
+            reason="BackOff", message="Back-off restarting failed container"
+        )
+    ]
+    service = KubernetesService(client)
+
+    events = service.list_namespace_events("default")
+
+    assert events[0].reason == "BackOff"
+    client.list_namespace_events.assert_called_once_with("default")
+
+
+def test_list_resource_quotas() -> None:
+    client = Mock()
+    client.list_resource_quotas.return_value = [
+        ResourceQuota(name="Pod", namespace="default", hard={}, used={})
+    ]
+    service = KubernetesService(client)
+
+    quotas = service.list_resource_quotas("default")
+
+    assert quotas[0].name == "Pod"
+    assert quotas[0].namespace == "default"
+    client.list_resource_quotas.assert_called_once_with("default")
+
+
+def test_get_resource_usage() -> None:
+    client = Mock()
+    client.get_resource_usage.return_value = ResourceUsage(
+        namespace="default",
+        pod_count=2,
+        cpu_requests={},
+        memory_requests={},
+        cpu_limits={},
+        memory_limits={},
+    )
+    service = KubernetesService(client)
+
+    usage = service.get_resource_usage("default")
+
+    assert usage.namespace == "default"
+    assert usage.pod_count == 2
+    assert usage.cpu_requests == {}
+    client.get_resource_usage.assert_called_once_with("default")
+
+
+def test_list_nodes() -> None:
+    client = Mock()
+    client.list_nodes.return_value = [
+        NodeStatus(
+            name="pod",
+            roles=[],
+            version="V1",
+            conditions=[
+                NodeCondition(
+                    last_transition_time=datetime.now(),
+                    last_heartbeat_time=datetime.now(),
+                    message="Pending",
+                    reason="Pending",
+                    status="True",
+                    type="Waiting",
+                )
+            ],
+        )
+    ]
+    service = KubernetesService(client)
+
+    nodes = service.list_nodes()
+
+    assert nodes[0].name == "pod"
+    assert nodes[0].conditions[0].message == "Pending"
+    assert nodes[0].conditions[0].type == "Waiting"
+    client.list_nodes.assert_called_once()
+
+
 def test_get_pod_log_without_tail_lines() -> None:
     client = Mock()
 
@@ -116,14 +198,16 @@ def test_list_deployments() -> None:
             replicas=1,
             available_replicas=1,
             unavailable_replicas=1,
-            condition=DeploymentCondition(
-                last_transition_time=datetime.now(),
-                last_update_time=datetime.now(),
-                message="some message",
-                reason="some reason",
-                status="some status",
-                type="some type",
-            ),
+            conditions=[
+                DeploymentCondition(
+                    last_transition_time=datetime.now(),
+                    last_update_time=datetime.now(),
+                    message="some message",
+                    reason="some reason",
+                    status="some status",
+                    type="some type",
+                )
+            ],
         )
     ]
 
@@ -135,4 +219,4 @@ def test_list_deployments() -> None:
     assert deployments[0].name == "dep-123"
     assert deployments[0].namespace == "default"
     assert deployments[0].replicas == 1
-    assert deployments[0].condition.message == "some message"
+    assert deployments[0].conditions[0].message == "some message"
