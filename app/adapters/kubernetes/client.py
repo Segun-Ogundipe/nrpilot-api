@@ -229,14 +229,12 @@ class KubernetesClient(KubernetesClientPort):
     def get_pod_log(
         self, namespace: str, pod_name: str, tail_lines: int | None = None
     ) -> Any:
-        log = self._execute(
+        return self._execute(
             lambda: self._core.read_namespaced_pod_log(
                 namespace=namespace, name=pod_name, tail_lines=tail_lines
             ),
             resource=ResourceType.POD,
         )
-
-        return log
 
     def list_deployments(
         self, namespace: str

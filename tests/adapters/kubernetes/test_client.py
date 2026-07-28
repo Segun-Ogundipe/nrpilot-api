@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TypeVar
 
-from kubernetes.client.exceptions import ApiException
+from kubernetes.client import ApiException
 from kubernetes.client.models import (
     CoreV1Event,
     V1Deployment,
