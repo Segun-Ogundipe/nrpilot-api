@@ -1,7 +1,7 @@
 import re
 from collections.abc import Sequence
 from html.parser import HTMLParser
-from time import perf_counter
+from time import perf_counter, time
 from typing import Final
 from urllib.parse import urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -15,6 +15,7 @@ logger = get_logger(__name__)
 
 _USER_AGENT: Final = "NRPilot/0.1 documentation retrieval"
 _MAX_EXCERPT_LENGTH: Final = 2_000
+_LINK_TTL_SECONDS: Final = 3600.0
 
 
 class NRPDocumentationClient(DocumentationRepository):
@@ -25,12 +26,16 @@ class NRPDocumentationClient(DocumentationRepository):
         documentation_url: str,
         timeout_seconds: float,
         max_results: int,
+        link_ttl_seconds: float = _LINK_TTL_SECONDS,
     ) -> None:
         self._documentation_url = _canonical_url(documentation_url)
         self._timeout_seconds = timeout_seconds
         self._max_results = max_results
         self._documentation_origin = _origin(self._documentation_url)
         self._documentation_path = urlsplit(self._documentation_url).path.rstrip("/")
+        self._link_ttl_seconds = link_ttl_seconds
+        self._cached_documentation_links: list[tuple[str, str]] | None = None
+        self._cached_documentation_links_expiry = 0.0
 
     def search(self, query: str) -> Sequence[DocumentationPage]:
         started_at = perf_counter()
@@ -83,6 +88,18 @@ class NRPDocumentationClient(DocumentationRepository):
         return pages
 
     def _documentation_links(self) -> list[tuple[str, str]]:
+        now = time()
+        if (
+            self._cached_documentation_links is not None
+            and now < self._cached_documentation_links_expiry
+        ):
+            logger.debug(
+                "nrp_documentation_links_cache_hit",
+                documentation_url=self._documentation_url,
+                ttl_seconds=f"{(self._cached_documentation_links_expiry - now):.0f}",
+            )
+            return list(self._cached_documentation_links)
+
         _, html = self._fetch(self._documentation_url)
         parser = _PageParser()
         parser.feed(html)
@@ -93,6 +110,8 @@ class NRPDocumentationClient(DocumentationRepository):
             if self._is_documentation_url(url):
                 links.append((title, url))
         unique_links = list(dict.fromkeys(links))
+        self._cached_documentation_links = unique_links
+        self._cached_documentation_links_expiry = now + self._link_ttl_seconds
         logger.debug(
             "nrp_documentation_links_discovered",
             documentation_url=self._documentation_url,

@@ -98,3 +98,41 @@ def test_documentation_client_emits_debug_events_without_query_content() -> None
     assert "nrp_documentation_pages_scored" in events
     assert logger.debug.call_args_list[0].kwargs["query_length"] == 35
     assert "query" not in logger.debug.call_args_list[0].kwargs
+
+
+def test_documentation_client_caches_documentation_links_for_ttl_duration() -> None:
+    client = NRPDocumentationClient(
+        documentation_url="https://docs.example.test/documentation/",
+        timeout_seconds=1,
+        max_results=1,
+        link_ttl_seconds=60,
+    )
+
+    fetch_calls: list[str] = []
+
+    def fetch(url: str) -> tuple[str, str]:
+        fetch_calls.append(url)
+        return (
+            url,
+            "<html><title>Documentation</title><body>"
+            '<a href="/documentation/storage/">Storage guide</a>'
+            "</body></html>"
+            if url == "https://docs.example.test/documentation/"
+            else "<html><title>Storage guide</title><main>Use storage.</main></html>",
+        )
+
+    client._fetch = fetch  # type: ignore[method-assign]
+
+    with patch("app.adapters.documentation.client.logger") as logger:
+        client.search("storage")
+        client.search("storage resources")
+
+    events = [call.args[0] for call in logger.debug.call_args_list]
+    assert "nrp_documentation_links_cache_hit" in events
+    assert fetch_calls == [
+        "https://docs.example.test/documentation/",
+        "https://docs.example.test/documentation/storage/",
+        "https://docs.example.test/documentation/",
+        "https://docs.example.test/documentation/storage/",
+        "https://docs.example.test/documentation/",
+    ]

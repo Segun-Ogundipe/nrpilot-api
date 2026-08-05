@@ -28,9 +28,9 @@ def get_kubernetes_service(
     return KubernetesService(client)
 
 
-def get_documentation_service(
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> DocumentationService:
+@lru_cache
+def get_documentation_service() -> DocumentationService:
+    settings = get_settings()
     client = NRPDocumentationClient(
         documentation_url=settings.nrp_documentation_url,
         timeout_seconds=settings.nrp_documentation_timeout_seconds,
