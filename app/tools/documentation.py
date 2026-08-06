@@ -17,7 +17,9 @@ def build_documentation_tools(service: DocumentationService) -> tuple[BaseTool]:
         Use this for NRP policies, services, tutorials, and usage guidance. Base
         answers only on the returned excerpts and cite the returned source URL.
         """
-        logger.info("documentation_tool_invoked", query=query)
+        logger.info(
+            "documentation_tool_invoked", tool="search_nrp_documentation", query=query
+        )
         return (
             "["
             + ",".join(page.model_dump_json() for page in service.search(query))
