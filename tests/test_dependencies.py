@@ -31,12 +31,12 @@ def test_get_kubernetes_client_and_service(settings: Settings) -> None:
     assert isinstance(resolved_service, KubernetesService)
 
 
-def test_get_documentation_service(settings: Settings) -> None:
+def test_get_documentation_service() -> None:
     with patch("app.dependencies.NRPDocumentationClient") as client_cls:
         client = MagicMock()
         client_cls.return_value = client
 
-        service = get_documentation_service(settings)
+        service = get_documentation_service()
 
     assert isinstance(service, DocumentationService)
 

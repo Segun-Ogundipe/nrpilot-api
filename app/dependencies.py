@@ -7,6 +7,7 @@ from app.adapters.documentation.client import NRPDocumentationClient
 from app.adapters.kubernetes.client import KubernetesClient
 from app.agents.nrpilot import NRPilotAgent, build_nrpilot_agent
 from app.core.settings import Settings
+from app.services.conversations.service import ConversationService
 from app.services.documentation.service import DocumentationService
 from app.services.kubernetes.service import KubernetesService
 
@@ -47,3 +48,8 @@ def get_nrpilot_agent(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> NRPilotAgent:
     return build_nrpilot_agent(kubernetes_service, documentation_service, settings)
+
+
+@lru_cache
+def get_conversation_service() -> ConversationService:
+    return ConversationService()

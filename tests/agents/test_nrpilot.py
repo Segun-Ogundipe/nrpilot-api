@@ -5,6 +5,7 @@ from pydantic import SecretStr
 
 from app.agents.nrpilot import NRPilotAgent, build_nrpilot_agent
 from app.core.settings import Settings
+from app.models.agents.nrpilot import ConversationMessage
 from app.services.documentation.service import DocumentationService
 from app.services.kubernetes.service import KubernetesService
 
@@ -23,6 +24,28 @@ def test_nrpilot_agent_returns_final_message() -> None:
     agent = NRPilotAgent(FakeDeepAgent())
 
     assert agent.ask("Is api healthy?") == "The api pod is running."
+
+
+def test_nrpilot_agent_includes_conversation_history() -> None:
+    deep_agent = Mock()
+    deep_agent.invoke.return_value = {"messages": [FakeMessage()]}
+    agent = NRPilotAgent(deep_agent)
+
+    agent.ask(
+        "What should I check next?",
+        [
+            ConversationMessage(role="user", content="Is api healthy?"),
+            ConversationMessage(role="assistant", content="The api pod is running."),
+        ],
+    )
+
+    assert deep_agent.invoke.call_args.args[0] == {
+        "messages": [
+            {"role": "user", "content": "Is api healthy?"},
+            {"role": "assistant", "content": "The api pod is running."},
+            {"role": "user", "content": "What should I check next?"},
+        ]
+    }
 
 
 def test_build_nrpilot_agent_raises_without_token() -> None:
