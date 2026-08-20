@@ -5,6 +5,7 @@ from langchain_openai import ChatOpenAI
 
 from app.core.logging import get_logger
 from app.core.settings import Settings
+from app.models.agents.nrpilot import ConversationMessage
 from app.services.documentation.service import DocumentationService
 from app.services.kubernetes.service import KubernetesService
 from app.tools.documentation import build_documentation_tools
@@ -26,13 +27,18 @@ class NRPilotAgent:
     def __init__(self, agent: Any) -> None:
         self._agent = agent
 
-    def ask(self, question: str) -> str:
+    def ask(
+        self, question: str, history: list[ConversationMessage] | None = None
+    ) -> str:
         logger.info("nrpilot_agent_invoked")
-        result = self._agent.invoke(
-            {"messages": [{"role": "user", "content": question}]}
-        )
-        messages = result["messages"]
-        return _message_content(messages[-1].content)
+        messages = [
+            {"role": message.role, "content": message.content}
+            for message in history or []
+        ]
+        messages.append({"role": "user", "content": question})
+        result = self._agent.invoke({"messages": messages})
+        response_messages = result["messages"]
+        return _message_content(response_messages[-1].content)
 
 
 def build_nrpilot_agent(

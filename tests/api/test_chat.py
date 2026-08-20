@@ -7,15 +7,32 @@ from app.adapters.kubernetes.exceptions import (
     KubernetesConnectionError,
     NamespaceNotFoundError,
 )
-from app.dependencies import get_kubernetes_service, get_nrpilot_agent
+from app.dependencies import (
+    get_conversation_service,
+    get_kubernetes_service,
+    get_nrpilot_agent,
+)
 from app.main import app
+from app.models.agents.nrpilot import ConversationMessage
 from app.models.kubernetes.models import KubernetesEvent, Pod
+from app.services.conversations.service import ConversationService
 
 
 class FakeNRPilotAgent:
-    def ask(self, question: str) -> str:
+    def ask(self, question: str, history: object = None) -> str:
         assert question == "Why is api failing?"
         return "The api pod has restart warnings."
+
+
+class FollowUpAgent:
+    def __init__(self) -> None:
+        self.histories: list[list[ConversationMessage] | None] = []
+
+    def ask(
+        self, question: str, history: list[ConversationMessage] | None = None
+    ) -> str:
+        self.histories.append(history)
+        return f"answer to {question}"
 
 
 def test_nrpilot_endpoint() -> None:
@@ -40,7 +57,8 @@ def test_nrpilot_endpoint() -> None:
     finally:
         app.dependency_overrides.clear()
 
-    assert chat.json() == {"answer": "The api pod has restart warnings."}
+    assert chat.json()["answer"] == "The api pod has restart warnings."
+    assert "conversation_id" in chat.json()
 
 
 def test_nrpilot_endpoint_returns_503_on_connection_error() -> None:
@@ -75,3 +93,34 @@ def test_nrpilot_endpoint_returns_404_on_missing_resource() -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
+
+
+def test_nrpilot_endpoint_preserves_context_for_follow_up() -> None:
+    agent = FollowUpAgent()
+    conversation_service = ConversationService()
+    app.dependency_overrides[get_nrpilot_agent] = lambda: agent
+    app.dependency_overrides[get_conversation_service] = lambda: conversation_service
+
+    try:
+        with TestClient(app) as client:
+            first_response = client.post(
+                "/api/v1/chat", json={"question": "Why is api failing?"}
+            )
+            second_response = client.post(
+                "/api/v1/chat",
+                json={
+                    "question": "What should I check next?",
+                    "conversation_id": first_response.json()["conversation_id"],
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert (
+        second_response.json()["conversation_id"]
+        == first_response.json()["conversation_id"]
+    )
+    assert agent.histories[1] == [
+        ConversationMessage(role="user", content="Why is api failing?"),
+        ConversationMessage(role="assistant", content="answer to Why is api failing?"),
+    ]
