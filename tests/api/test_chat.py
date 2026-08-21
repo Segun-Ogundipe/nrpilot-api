@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from datetime import datetime
 from unittest.mock import Mock
 
@@ -23,6 +24,11 @@ class FakeNRPilotAgent:
         assert question == "Why is api failing?"
         return "The api pod has restart warnings."
 
+    async def stream(self, question: str, history: object = None) -> AsyncIterator[str]:
+        assert question == "Why is api failing?"
+        yield "The api pod "
+        yield "has restart warnings."
+
 
 class FollowUpAgent:
     def __init__(self) -> None:
@@ -33,6 +39,12 @@ class FollowUpAgent:
     ) -> str:
         self.histories.append(history)
         return f"answer to {question}"
+
+    async def stream(
+        self, question: str, history: list[ConversationMessage] | None = None
+    ) -> AsyncIterator[str]:
+        self.histories.append(history)
+        yield f"answer to {question}"
 
 
 def test_nrpilot_endpoint() -> None:
@@ -59,6 +71,43 @@ def test_nrpilot_endpoint() -> None:
 
     assert chat.json()["answer"] == "The api pod has restart warnings."
     assert "conversation_id" in chat.json()
+
+
+def test_nrpilot_stream_endpoint_returns_sse_chunks() -> None:
+    app.dependency_overrides[get_nrpilot_agent] = lambda: FakeNRPilotAgent()
+
+    try:
+        with TestClient(app) as client:
+            with client.stream(
+                "POST", "/api/v1/chat/stream", json={"question": "Why is api failing?"}
+            ) as response:
+                body = "".join(response.iter_text())
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert body.startswith('event: conversation\ndata: {"conversation_id": "')
+    assert 'event: message\ndata: {"answer": "The api pod "}\n\n' in body
+    assert 'event: message\ndata: {"answer": "has restart warnings."}\n\n' in body
+    assert body.endswith("event: done\ndata: {}\n\n")
+
+
+def test_nrpilot_endpoint_streams_when_sse_is_accepted() -> None:
+    app.dependency_overrides[get_nrpilot_agent] = lambda: FakeNRPilotAgent()
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/chat",
+                headers={"Accept": "text/event-stream"},
+                json={"question": "Why is api failing?"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert 'event: message\ndata: {"answer": "The api pod "}' in response.text
+    assert response.text.endswith("event: done\ndata: {}\n\n")
 
 
 def test_nrpilot_endpoint_returns_503_on_connection_error() -> None:

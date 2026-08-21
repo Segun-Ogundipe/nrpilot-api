@@ -83,7 +83,8 @@ Interactive API documentation is available at [http://127.0.0.1:8000/docs](http:
 | `GET /health` | General health check. |
 | `GET /live` | Liveness probe. |
 | `GET /ready` | Readiness probe. |
-| `POST /api/v1/chat` | Submit a natural-language question to NRPilot. |
+| `POST /api/v1/chat` | Submit a natural-language question to NRPilot; supports JSON or SSE responses. |
+| `POST /api/v1/chat/stream` | Stream an NRPilot answer as server-sent events (SSE). |
 
 Every response includes an `X-Request-ID` header for request correlation.
 
@@ -116,6 +117,54 @@ instance. It is not durable and is not shared between replicas. Questions must
 be non-empty and no longer than 4,000 characters. The endpoint returns `503`
 when Kubernetes or NRP documentation is unavailable, and `404` when a requested
 Kubernetes resource cannot be found.
+
+### Streaming chat
+
+Use SSE to display an answer as it is generated. Either request the dedicated
+streaming endpoint, or send `Accept: text/event-stream` to `POST /api/v1/chat`.
+Use `-N` with curl to disable output buffering:
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/api/v1/chat/stream \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"Why is the api pod restarting in the default namespace?"}'
+```
+
+The stream starts with a `conversation` event so the client can retain its ID,
+then emits `message` events containing answer chunks. It finishes with `done`.
+Send the returned ID in subsequent requests to include the prior conversation
+turns in the agent context.
+
+```text
+event: conversation
+data: {"conversation_id":"8f56f283-7f0a-4af8-9cee-9902810f384f"}
+
+event: message
+data: {"answer": "The"}
+
+event: message
+data: {"answer": " api"}
+
+event: message
+data: {"answer": " pod"}
+
+event: message
+data: {"answer": " is"}
+
+event: message
+data: {"answer": " restarting"}
+
+event: message
+data: {"answer": " because "}
+
+event: done
+data: {}
+```
+
+If a known Kubernetes or documentation failure occurs during streaming, the
+stream ends with an `error` event containing a user-safe `detail` field instead
+of `done`. A completed streamed reply is retained in the in-memory conversation
+history just like a JSON chat reply.
 
 ## Configuration
 
