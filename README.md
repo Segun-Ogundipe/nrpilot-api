@@ -135,9 +135,9 @@ then emits `message` events containing answer chunks. It finishes with `done`.
 Send the returned ID in subsequent requests to include the prior conversation
 turns in the agent context.
 
-```text
+```json
 event: conversation
-data: {"conversation_id":"8f56f283-7f0a-4af8-9cee-9902810f384f"}
+data: {"conversation_id": "8f56f283-7f0a-4af8-9cee-9902810f384f"}
 
 event: message
 data: {"answer": "The"}
@@ -155,7 +155,7 @@ event: message
 data: {"answer": " restarting"}
 
 event: message
-data: {"answer": " because "}
+data: {"answer": " because"}
 
 event: done
 data: {}
