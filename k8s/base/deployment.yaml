@@ -28,7 +28,7 @@ spec:
         - name: KUBERNETES_HOST
           value: https://kubernetes.default.svc
         - name: NRP_LLM_BASE_URL
-          value: https://llm.nrp-nautilus.io/api/v1
+          value: https://ellm.nrp-nautilus.io/v1
         envFrom:
         - secretRef:
             name: nrpilot-api-secrets

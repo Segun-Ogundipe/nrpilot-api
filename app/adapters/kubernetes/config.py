@@ -11,4 +11,5 @@ def load_kubernetes_config(settings: Settings) -> ApiClient:
             f"Bearer {settings.kubernetes_api_key.get_secret_value()}"
         )
 
+    configuration.verify_ssl = False
     return ApiClient(configuration)
