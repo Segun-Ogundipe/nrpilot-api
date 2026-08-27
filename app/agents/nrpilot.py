@@ -1,7 +1,9 @@
+from collections.abc import AsyncIterator
 from typing import Any
 
 from deepagents import create_deep_agent
 from langchain_openai import ChatOpenAI
+from langgraph.graph.state import CompiledStateGraph
 
 from app.core.logging import get_logger
 from app.core.settings import Settings
@@ -24,21 +26,29 @@ the namespace and pod name for any resource you discuss."""
 
 
 class NRPilotAgent:
-    def __init__(self, agent: Any) -> None:
+    def __init__(self, agent: CompiledStateGraph) -> None:
         self._agent = agent
 
     def ask(
         self, question: str, history: list[ConversationMessage] | None = None
     ) -> str:
         logger.info("nrpilot_agent_invoked")
-        messages = [
-            {"role": message.role, "content": message.content}
-            for message in history or []
-        ]
-        messages.append({"role": "user", "content": question})
-        result = self._agent.invoke({"messages": messages})
+        result = self._agent.invoke({"messages": _messages(question, history)})
         response_messages = result["messages"]
         return _message_content(response_messages[-1].content)
+
+    async def stream(
+        self, question: str, history: list[ConversationMessage] | None = None
+    ) -> AsyncIterator[str]:
+        """Yield generated assistant text as soon as the underlying model emits it."""
+        logger.info("nrpilot_agent_stream_invoked")
+        async for message, _metadata in self._agent.astream(
+            {"messages": _messages(question, history)},
+            stream_mode="messages",
+        ):
+            content = _message_content(message.content)  # type: ignore[union-attr]
+            if content:
+                yield content
 
 
 def build_nrpilot_agent(
@@ -73,3 +83,15 @@ def _message_content(content: str | list[str | dict[str, Any]]) -> str:
         block if isinstance(block, str) else str(block.get("text", ""))
         for block in content
     )
+
+
+def _messages(
+    question: str, history: list[ConversationMessage] | None
+) -> list[dict[str, str]]:
+    return [
+        *(
+            {"role": message.role, "content": message.content}
+            for message in history or []
+        ),
+        {"role": "user", "content": question},
+    ]
